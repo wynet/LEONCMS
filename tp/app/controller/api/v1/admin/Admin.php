@@ -193,28 +193,29 @@ class Admin extends BaseController
     {
         // 验证输入
         try {
+            $data = $this->request->post();
             validate(AdminValidate::class)
                 ->scene('password')
-                ->check($this->request->post());
+                ->check($data);
         } catch (ValidateException $e) {
             return $this->error($e->getMessage());
         }
 
         // 获取当前管理员
-        $admin = AdminModel::find($this->request->user['id']);
+        $admin = AdminModel::find($this->request->adminInfo['id']);
         if (!$admin) {
             return $this->error('管理员不存在');
         }
 
         // 验证旧密码
-        if (!$admin->verifyPassword($this->request->post('old_password'))) {
+        if (!$admin->verifyPassword($data['old_password'])) {
             return $this->error('旧密码错误');
         }
 
         try {
             // 更新密码
             $admin->save([
-                'password' => $this->request->post('password')
+                'password' => $data['password']
             ]);
             
             return $this->success(null, '密码修改成功');
