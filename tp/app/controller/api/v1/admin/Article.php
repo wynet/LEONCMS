@@ -7,6 +7,7 @@ use app\BaseController;
 use app\model\Article as ArticleModel;
 use app\validate\ArticleValidate;
 use think\exception\ValidateException;
+use think\Request;
 
 class Article extends BaseController
 {
@@ -105,39 +106,58 @@ class Article extends BaseController
     }
 
     /**
+     * 显示指定的文章
+     */
+    public function read($id)
+    {
+        try {
+            $article = \app\model\Article::find($id);
+            if (!$article) {
+                return error('文章不存在', 404);
+            }
+            return success($article);
+        } catch (\Exception $e) {
+            return error($e->getMessage());
+        }
+    }
+
+    /**
      * 更新文章
      */
     public function update($id)
     {
-        // 验证输入
         try {
-            validate(ArticleValidate::class)
-                ->scene('update')
-                ->check(['id' => $id] + $this->request->put());
-        } catch (ValidateException $e) {
-            return $this->error($e->getMessage());
-        }
+            $article = ArticleModel::find($id);
+            if (!$article) {
+                return $this->error('文章不存在', 404);
+            }
 
-        // 查找文章
-        $article = ArticleModel::find($id);
-        if (!$article) {
-            return $this->error('文章不存在');
-        }
-
-        // XSS过滤
-        $data = array_map(function($value) {
-            return is_string($value) ? htmlspecialchars($value) : $value;
-        }, $this->request->put());
-
-        try {
-            // 更新文章
-            $article->save($data);
+            // 获取更新数据
+            $data = $this->request->put();
+            $data['id'] = $id;  // 添加ID到验证数据中
             
+            // XSS过滤
+            $data = $this->filterXSS($data);
+            
+            // 验证数据
+            try {
+                validate(ArticleValidate::class)
+                    ->scene('update')
+                    ->check($data);
+            } catch (ValidateException $e) {
+                return $this->error($e->getMessage());
+            }
+
+            // 更新数据
+            if ($article->save($data) === false) {
+                return $this->error('更新失败');
+            }
+
             // 重新获取完整信息
             $article = ArticleModel::with(['category', 'author'])
                 ->find($id)
                 ->append(['status_text']);
-            
+
             return $this->success([
                 'article' => $article
             ], '更新成功');
@@ -173,46 +193,5 @@ class Article extends BaseController
         } catch (\Exception $e) {
             return $this->error('删除失败：' . $e->getMessage());
         }
-    }
-
-    /**
-     * 获取当前登录用户ID
-     */
-    protected function getUserId()
-    {
-        // 从登录信息中获取用户ID
-        return $this->request->user['id'] ?? 0;
-    }
-
-    /**
-     * 成功响应
-     * @param array $data 响应数据
-     * @param string $message 响应信息
-     * @param int $code 响应码
-     * @return \think\Response
-     */
-    protected function success($data = [], string $message = 'success', int $code = 200): \think\Response
-    {
-        return json([
-            'code' => $code,
-            'message' => $message,
-            'data' => $data
-        ]);
-    }
-
-    /**
-     * 错误响应
-     * @param string $message 错误信息
-     * @param int $code 错误码
-     * @param mixed $data 错误数据
-     * @return \think\Response
-     */
-    protected function error(string $message = '', int $code = 400, $data = []): \think\Response
-    {
-        return json([
-            'code' => $code,
-            'message' => $message,
-            'data' => $data
-        ]);
     }
 } 
